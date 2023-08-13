@@ -1,0 +1,154 @@
+namespace Chisato.ServerManagement
+{
+    class MainControl
+    {
+        public static string fromEmail = "//user email//"; // // <- means for the user to decide
+        public static string password = "//user password//";
+        public static string toEmail = "//to email// if using 2 seprate accounts try to avoid to prevent blocking with spam as using outlook smtp server if not using 2 seperate account set to the same ad from email";
+        public static string serverName = "//server name//";
+        public static string folderPath = "//share path/file name";
+        public static string fileName = "StatusFile.txt";
+        public static string driveName = "//main drive name//";
+
+        private static string filePath;
+        private static string exists = null; //used for debugging purposses
+        private static string remainingStorage = null;
+        private static string connected = null;
+        private static string driveStroageList = null; // used when taking storage for more than one drive //not implemented//
+
+        private static float storageWarningLimit = 10; //in Gigabytes
+
+        static void Main()
+        {
+            filePath = folderPath + fileName;
+            CreateReport(filePath);
+        }
+
+        public static void SendEmail(System.IO.StreamReader file) //takes a stream reader as argument for sending teh contexnts of the file the contents of the file is saved to a directory on the server for logging purposes at the moment set to ovewrite but can be changed on bigger deployments
+        {
+            var fromAddress = new System.Net.Mail.MailAddress(fromEmail);   //covnerts strings to email address for sending
+            var toAddress = new System.Net.Mail.MailAddress(toEmail);
+            string fromPassword = password;
+            string subject = "Server Report";
+            if (NearFull(GetTotalFreeSpace(driveName)))
+            {
+                subject = "Server Report: REMAINING STORAGE BELLOW 10GB"; //storage warning in subject
+            }
+            else
+            {
+                subject = "Server Report";
+            }
+            string body = file.ReadToEnd();
+            file.Close();
+
+            var smtp = new System.Net.Mail.SmtpClient
+            {
+                Host = "smtp.office365.com",  //using microsoft smtp server
+                Port = 587,
+                EnableSsl = true,
+                DeliveryMethod = System.Net.Mail.SmtpDeliveryMethod.Network,
+                UseDefaultCredentials = false,
+                Credentials = new System.Net.NetworkCredential(fromAddress.Address, fromPassword)
+
+            };
+            using (var message = new System.Net.Mail.MailMessage(fromAddress, toAddress) //sets up message
+            {
+                Subject = subject,
+                Body = body
+            })
+            {
+                smtp.Send(message);
+            }
+        }
+
+        public static void CreateReport(string filePath)
+        {
+            System.IO.StreamReader compiledFile = CreateFile(filePath);
+            SendEmail(compiledFile);
+        }
+
+        public static System.IO.StreamReader CreateFile(string fileLocationPath)
+        {
+            if (System.IO.File.Exists(fileLocationPath)) //checks if it exists if it does deletes then creates if not just creates the file
+            {
+                exists = "yes"; //debugging
+                System.IO.File.Delete(fileLocationPath);
+                FileWriting(fileLocationPath);
+
+            }
+            else
+            {
+                exists = "no"; //debugging
+                FileWriting(fileLocationPath);
+            }
+            return new System.IO.StreamReader(System.IO.File.Open(fileLocationPath, System.IO.FileMode.Open)); //returns the created stream reader from the file
+        }
+
+        private static void FileWriting(string filePath) //gets info from all info functions then writes to the file in an easy to read format
+        {
+            remainingStorage = GetTotalFreeSpace(driveName).ToString();
+            if (CheckForInternetConnection())
+                connected = "Connected";
+            else
+                connected = "Not Connected";
+            System.IO.StreamWriter file = System.IO.File.CreateText(filePath);
+            file.WriteLine(string.Concat("Server: ", serverName));
+            file.WriteLine();
+            file.WriteLine(string.Concat("Connection: ", connected));
+            file.WriteLine();
+            file.WriteLine(string.Concat("Remaining Storage: ", remainingStorage, " GB"));
+            if (NearFull(GetTotalFreeSpace(driveName)))
+            {
+                file.WriteLine("Warning Low Storage");
+            }
+            file.WriteLine();
+            file.WriteLine(string.Concat("IP Address: ", GetIP()));
+            file.Close();
+        }
+
+        private static bool NearFull(float storageRemaining) // checks if the storage passes in is bellow the threshold
+        {
+            if (storageRemaining <= storageWarningLimit)
+                return true;
+            else
+                return false;
+        }
+
+        private static float GetTotalFreeSpace(string driveName) //only works with 1 drive at the moment
+        {
+            foreach (System.IO.DriveInfo drive in System.IO.DriveInfo.GetDrives())
+            {
+                if (drive.IsReady && drive.Name == driveName)
+                {
+                    return System.MathF.Floor(System.Convert.ToSingle(System.Convert.ToDouble((drive.AvailableFreeSpace / 1000 / 1000 / 1000)) * 0.931323)); //converts from binary prefix to metric prefix and converts to GB then floors the outcome so the display size is they same as if you looked at the drive on file explorer
+                }
+            }
+            return -1; //else returns -1
+        }
+
+        public static bool CheckForInternetConnection(int timeoutMs = 10000, string url = null) //checks if a ping sent is recived back
+        {
+            try
+            {
+                url = "http://www.gstatic.com/generate_204";
+
+                var request = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
+                request.KeepAlive = false;
+                request.Timeout = timeoutMs;
+                using (var response = (System.Net.HttpWebResponse)request.GetResponse())
+                    return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static string GetIP() //gets current ip of device
+        {
+            string hostName = System.Net.Dns.GetHostName();
+            return System.Net.Dns.GetHostByName(hostName).AddressList[0].ToString();
+        }
+
+    }
+}
