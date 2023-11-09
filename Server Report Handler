@@ -1,154 +1,303 @@
-namespace Chisato.ServerManagement
+using System.Linq;
+using System;
+using System.IO;
+using System.Collections.Generic;
+using System.Net;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.Reflection;
+using System.Runtime.Serialization;
+
+class MainControl
 {
-    class MainControl
+    public static string fromEmail;
+    public static string password;
+    public static string toEmail;
+    public static string serverName;
+    public static string folderPath;
+    public static string fileName;
+    public static List<string> driveNameList;
+
+    private static string filePath;
+    private static string connected = null;
+
+    private static float storageWarningLimit; //in Gigabytes
+
+    private static int reportMaxCount;
+
+    private static int logAmount;
+
+    private static string readFilePath;
+    private static string storageLocation = "/Path To Config File/";
+    private static string settingsFileName = "ReportConfig.txt";
+
+    [Obsolete]
+    static void Main()
     {
-        public static string fromEmail = "//user email//"; // // <- means for the user to decide
-        public static string password = "//user password//";
-        public static string toEmail = "//to email// if using 2 seprate accounts try to avoid to prevent blocking with spam as using outlook smtp server if not using 2 seperate account set to the same ad from email";
-        public static string serverName = "//server name//";
-        public static string folderPath = "//share path/file name";
-        public static string fileName = "StatusFile.txt";
-        public static string driveName = "//main drive name//";
+        readFilePath = string.Concat(storageLocation, settingsFileName);
+        SettingObject settings = ReadFromBinaryFile<SettingObject>(readFilePath);
+        fromEmail = settings.email;
+        password = settings.password;
+        toEmail = settings.email;
+        serverName = settings.serverName;
+        folderPath = settings.folderPath;
+        fileName = settings.fileName;
+        driveNameList = settings.driveList;
+        storageWarningLimit = settings.storageWarningLimit;
+        reportMaxCount = settings.reportMaxCount;
+        logAmount = settings.logAmount;
+        filePath = folderPath + fileName;
+        CreateReport(filePath);
+    }
 
-        private static string filePath;
-        private static string exists = null; //used for debugging purposses
-        private static string remainingStorage = null;
-        private static string connected = null;
-        private static string driveStroageList = null; // used when taking storage for more than one drive //not implemented//
+    public static void CreateReport(string filePath)
+    {
+        CreateFile(filePath);
+    }
 
-        private static float storageWarningLimit = 10; //in Gigabytes
+    public static void CreateFile(string fileLocationPath)
+    {
+        DirectoryInfo dirInfo = new DirectoryInfo(folderPath);
+        FileInfo[] files = dirInfo.GetFiles().OrderBy(f => f.CreationTime).ToArray();
 
-        static void Main()
+        int num = 1;
+
+        if (files.Length > 0)
         {
-            filePath = folderPath + fileName;
-            CreateReport(filePath);
-        }
-
-        public static void SendEmail(System.IO.StreamReader file) //takes a stream reader as argument for sending teh contexnts of the file the contents of the file is saved to a directory on the server for logging purposes at the moment set to ovewrite but can be changed on bigger deployments
-        {
-            var fromAddress = new System.Net.Mail.MailAddress(fromEmail);   //covnerts strings to email address for sending
-            var toAddress = new System.Net.Mail.MailAddress(toEmail);
-            string fromPassword = password;
-            string subject = "Server Report";
-            if (NearFull(GetTotalFreeSpace(driveName)))
+            string[] fileNumbers = files.Select(file =>
             {
-                subject = "Server Report: REMAINING STORAGE BELLOW 10GB"; //storage warning in subject
-            }
-            else
-            {
-                subject = "Server Report";
-            }
-            string body = file.ReadToEnd();
-            file.Close();
-
-            var smtp = new System.Net.Mail.SmtpClient
-            {
-                Host = "smtp.office365.com",  //using microsoft smtp server
-                Port = 587,
-                EnableSsl = true,
-                DeliveryMethod = System.Net.Mail.SmtpDeliveryMethod.Network,
-                UseDefaultCredentials = false,
-                Credentials = new System.Net.NetworkCredential(fromAddress.Address, fromPassword)
-
-            };
-            using (var message = new System.Net.Mail.MailMessage(fromAddress, toAddress) //sets up message
-            {
-                Subject = subject,
-                Body = body
-            })
-            {
-                smtp.Send(message);
-            }
-        }
-
-        public static void CreateReport(string filePath)
-        {
-            System.IO.StreamReader compiledFile = CreateFile(filePath);
-            SendEmail(compiledFile);
-        }
-
-        public static System.IO.StreamReader CreateFile(string fileLocationPath)
-        {
-            if (System.IO.File.Exists(fileLocationPath)) //checks if it exists if it does deletes then creates if not just creates the file
-            {
-                exists = "yes"; //debugging
-                System.IO.File.Delete(fileLocationPath);
-                FileWriting(fileLocationPath);
-
-            }
-            else
-            {
-                exists = "no"; //debugging
-                FileWriting(fileLocationPath);
-            }
-            return new System.IO.StreamReader(System.IO.File.Open(fileLocationPath, System.IO.FileMode.Open)); //returns the created stream reader from the file
-        }
-
-        private static void FileWriting(string filePath) //gets info from all info functions then writes to the file in an easy to read format
-        {
-            remainingStorage = GetTotalFreeSpace(driveName).ToString();
-            if (CheckForInternetConnection())
-                connected = "Connected";
-            else
-                connected = "Not Connected";
-            System.IO.StreamWriter file = System.IO.File.CreateText(filePath);
-            file.WriteLine(string.Concat("Server: ", serverName));
-            file.WriteLine();
-            file.WriteLine(string.Concat("Connection: ", connected));
-            file.WriteLine();
-            file.WriteLine(string.Concat("Remaining Storage: ", remainingStorage, " GB"));
-            if (NearFull(GetTotalFreeSpace(driveName)))
-            {
-                file.WriteLine("Warning Low Storage");
-            }
-            file.WriteLine();
-            file.WriteLine(string.Concat("IP Address: ", GetIP()));
-            file.Close();
-        }
-
-        private static bool NearFull(float storageRemaining) // checks if the storage passes in is bellow the threshold
-        {
-            if (storageRemaining <= storageWarningLimit)
-                return true;
-            else
-                return false;
-        }
-
-        private static float GetTotalFreeSpace(string driveName) //only works with 1 drive at the moment
-        {
-            foreach (System.IO.DriveInfo drive in System.IO.DriveInfo.GetDrives())
-            {
-                if (drive.IsReady && drive.Name == driveName)
+                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
+                string[] parts = fileNameWithoutExtension.Split('-');
+                if (parts.Length > 1)
                 {
-                    return System.MathF.Floor(System.Convert.ToSingle(System.Convert.ToDouble((drive.AvailableFreeSpace / 1000 / 1000 / 1000)) * 0.931323)); //converts from binary prefix to metric prefix and converts to GB then floors the outcome so the display size is they same as if you looked at the drive on file explorer
+                    return parts[parts.Length - 1];
                 }
-            }
-            return -1; //else returns -1
+                return "0"; // Return 0 if there's no valid number in the filename
+            }).ToArray();
+
+            int[] fileNumArray = fileNumbers.Select(int.Parse).ToArray();
+            num = fileNumArray.Max() + 1;
         }
 
-        public static bool CheckForInternetConnection(int timeoutMs = 10000, string url = null) //checks if a ping sent is recived back
+        if (dirInfo.GetFiles().Length >= reportMaxCount)
         {
-            try
-            {
-                url = "http://www.gstatic.com/generate_204";
-
-                var request = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
-                request.KeepAlive = false;
-                request.Timeout = timeoutMs;
-                using (var response = (System.Net.HttpWebResponse)request.GetResponse())
-                    return true;
-            }
-            catch
-            {
-                return false;
-            }
+            File.Delete(files.First().FullName);
         }
 
-        public static string GetIP() //gets current ip of device
+        FileWriting(Path.Combine(folderPath, $"{fileLocationPath}-{num}.txt"));
+    }
+
+    private static void FileWriting(string filePath) //gets info from all info functions then writes to the file in an easy to read format formate data line data line and then x amount of lines of the log at the end of the file
+    {
+        List<Tuple<string, float>> driveStorageList = new List<Tuple<string, float>>();
+        foreach (Tuple<string, float> driveData in GetTotalFreeSpace(driveNameList))
         {
-            string hostName = System.Net.Dns.GetHostName();
-            return System.Net.Dns.GetHostByName(hostName).AddressList[0].ToString();
+            driveStorageList.Add(driveData);
         }
+        if (CheckForInternetConnection())
+            connected = "Connected";
+        else
+            connected = "Not Connected";
+        StreamWriter file = File.CreateText(filePath);
+        file.WriteLine(string.Concat("Server: ", serverName));
+        file.WriteLine();
+        file.WriteLine(string.Concat("Connection: ", connected));
+        file.WriteLine();
+        foreach (Tuple<string, float> driveData in driveStorageList)
+        {
+            file.WriteLine(string.Concat("Remaining Storage For Drive; ", driveData.Item1, " ---- " , driveData.Item2, " GB"));
+            if (NearFull(driveData.Item2))
+            {
+                file.WriteLine($"Warning Low Storage for; {driveData.Item1}");
+            }
+        }
+        file.WriteLine();
+        file.WriteLine(string.Concat("IP Address: ", GetIP()));
+        DateTime dateTime = DateTime.Now;
+        int day = dateTime.Day;
+        int month = dateTime.Month;
+        int year = dateTime.Year;
+        int hour = dateTime.Hour;
+        int minute = dateTime.Minute;
+        int second = dateTime.Second;
+        string hour1;
+        string hourString = hour.ToString();
+        if (hourString.Length < 2)
+        {
+            hour1 = string.Concat("0", hourString);
+        }
+        else
+        {
+            hour1 = hourString;
+        }
+        string minute1;
+        string minuteString = minute.ToString();
+        if (minuteString.Length < 2)
+        {
+            minute1 = string.Concat("0", minuteString);
+        }
+        else
+        {
+            minute1 = minuteString;
+        }
+        string second1;
+        string secondString = second.ToString();
+        if (secondString.Length < 2)
+        {
+            second1 = string.Concat("0", secondString);
+        }
+        else
+        {
+            second1 = secondString;
+        }
+        file.WriteLine();
+        file.WriteLine(string.Concat("Time Of Report: ", hour1, ":", minute1, ":", second1, "  ", day, "/", month, "/", year));
+        for (int i = 0; i < 10; i++)
+        {
+            file.WriteLine();
+        }
+        file.WriteLine(string.Concat("System Logs: "));
+        file.WriteLine();
+        file.WriteLine(GetLogsNew(logAmount));
+        file.Close();
+    }
 
+    private static bool NearFull(float storageRemaining) // checks if the storage passes in is bellow the threshold
+    {
+        if (storageRemaining <= storageWarningLimit)
+            return true;
+        else
+            return false;
+    }
+
+    private static List<Tuple<string, float>> GetTotalFreeSpace(List<string> names)
+    {
+        List<Tuple<string, float>> driveStorage = new List<Tuple<string, float>>();
+        foreach (DriveInfo drive in DriveInfo.GetDrives())
+        {
+            if (drive.IsReady && names.Contains(drive.Name))
+            {
+                driveStorage.Add(new Tuple<string, float>(drive.Name, MathF.Floor(Convert.ToSingle(Convert.ToDouble((drive.AvailableFreeSpace / 1000 / 1000 / 1000)) * 0.931323)))); 
+                //converts from binary prefix to metric prefix and converts to GB then floors the outcome so the display size is they same as if you looked at the drive on file explorer
+            }
+        }
+        return driveStorage;
+    }
+
+    public static bool CheckForInternetConnection(int timeoutMs = 10000, string url = null) //checks if a ping sent is recived back
+    {
+        try
+        {
+            url = "http://www.gstatic.com/generate_204";
+
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.KeepAlive = false;
+            request.Timeout = timeoutMs;
+            using (var response = (HttpWebResponse)request.GetResponse())
+                return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static string GetIP() //gets current ip of device
+    {
+        string hostName = Dns.GetHostName();
+        return
+        Dns.GetHostByName(hostName).AddressList[0].ToString();
+    }
+
+    private static string GetLogsNew(int numLogsToRetrieve)
+    {
+        string LogFilePath = "/var/log/syslog"; // Replace with the actual log file path
+
+        if (File.Exists(LogFilePath))
+        {
+            // Read all lines from the log file
+            string[] allLines = File.ReadAllLines(LogFilePath);
+
+            // Calculate the start index to retrieve the last 'numLogsToRetrieve' lines
+            int startIndex = Math.Max(0, allLines.Length - numLogsToRetrieve);
+
+            // Select the last 'numLogsToRetrieve' lines
+            string[] selectedLines = allLines.Skip(startIndex).ToArray();
+
+            // Join the selected lines into a single string
+            string output = string.Empty;
+            selectedLines.Reverse();
+            for (int i = 0; i < selectedLines.Count(); i++)
+            {
+                output += Environment.NewLine;
+                output += selectedLines[i];
+            }
+
+            return output;
+        }
+        else
+        {
+            return "Log file not found";
+        }
+    }
+
+    [Obsolete]
+    public static T ReadFromBinaryFile<T>(string filePath)
+    {
+        using (Stream stream = File.Open(filePath, FileMode.Open))
+        {
+            var binaryFormatter = new BinaryFormatter();
+            binaryFormatter.Binder = new CustomizedBinder();
+            return (T)binaryFormatter.Deserialize(stream);
+        }
+    }
+}
+
+[Serializable]
+public class SettingObject
+{
+    public string email;
+    public string password;
+    public string serverName;
+    public string folderPath;
+    public string fileName;
+    public List<string> driveList;
+    public float storageWarningLimit;
+    public int reportMaxCount;
+    public int logAmount;
+    public int reportHourly;
+
+    public SettingObject()
+    {
+        email = null;
+        password = null;
+        serverName = null;
+        folderPath = null;
+        fileName = "StatusFile";
+        driveList = new List<string>();
+        storageWarningLimit = 20;
+        reportMaxCount = 36;
+        logAmount = 20;
+    }
+}
+
+sealed class CustomizedBinder : SerializationBinder
+{
+    public override Type BindToType(string assemblyName, string typeName)
+    {
+        Type returntype = null;
+        string sharedAssemblyName = "SharedAssembly, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null";
+        assemblyName = Assembly.GetExecutingAssembly().FullName;
+        typeName = typeName.Replace(sharedAssemblyName, assemblyName);
+        returntype =
+                Type.GetType(String.Format("{0}, {1}",
+                typeName, assemblyName));
+
+        return returntype;
+    }
+
+    public override void BindToName(Type serializedType, out string assemblyName, out string typeName)
+    {
+        base.BindToName(serializedType, out assemblyName, out typeName);
+        assemblyName = "SharedAssembly, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null";
     }
 }
