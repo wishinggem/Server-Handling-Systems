@@ -1,9 +1,17 @@
 # Server-Handling-Systems
-Collection of systems and scripts that handles file server reports
+Collection of systems and scripts that handles server reports
 
+A application that allows for the changing of how the reports are done for example what email they are sent to and how frequently
+A script to display what the config file contains without having to aopen the application
+A script to create the missing config files
 
-Changed the system to work on a ui that allows for the changing of how data is recorded and then save to a config file the ui uses unity and is built specifically for the platform
+Setup:
+download and unzip all files in compiled folder to the user home directory then add into the sudo crontab -e a job that runs every our pointing to the master controller for example "0 * * * * sudo mono /home/-user-/MasterReportController.exe 
+then write out and save crontab 
+then launch application and then enter details press apply and then the reporting system is running
+/////////
 
-To setup the Report file and Sending file you need to add the path to the config file directory into the stirng "storageLocation" and then compile and it will read the config file created by the ui application adn then use that to apply data
+If the compiled files fail to work try downloading the source code then compile yourself using mono the ui files should work due to it using unity and compiling through there builder 
 
-The Ui control file has Dependancies on unity a built version is not included as it depends on where the config file is located (I plan to make a universal build for linux and windows eventually)
+/////////
+I am working on a way to edit the config file without the application if you would prefer to edit settings without ui and also and setup script to create the crontab autmoatically
