@@ -1,4 +1,4 @@
- using System.Reflection;
+using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
@@ -22,8 +22,14 @@ public class ConfigFileCreationg
         recorderPath = string.Concat("/home/", sudoUser, "/", recorderName);
         SettingObject settings = new SettingObject();
         MasterRecorder recorder = new MasterRecorder();
-        FileHandler.WriteToBinaryFile<SettingObject>(configPath, settings);
-        FileHandler.WriteToBinaryFile<MasterRecorder>(recorderPath, recorder);
+        if (!File.Exists(configPath))
+        {
+            FileHandler.WriteToBinaryFile<SettingObject>(configPath, settings);
+        }
+        if (!File.Exists(recorderPath))
+        {
+            FileHandler.WriteToBinaryFile<MasterRecorder>(recorderPath, recorder);
+        }
         Console.WriteLine("Config and Data Files Created");
     }
 }
