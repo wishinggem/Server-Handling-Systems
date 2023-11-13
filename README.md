@@ -6,7 +6,7 @@ A script to display what the config file contains without having to aopen the ap
 A script to create the missing config files
 
 Setup:
-download and unzip all files in compiled folder to the user home directory then add into the sudo crontab -e a job that runs every our pointing to the master controller for example "0 * * * * sudo mono /home/-user-/MasterReportController.exe 
+download and unzip all files in compiled folder to the user home directory then add into the sudo crontab -e a job that runs every our pointing to the master controller for example "0 * * * * sudo mono /home/user/MasterReportController.exe 
 then write out and save crontab 
 then launch application and then enter details press apply and then the reporting system is running
 /////////
